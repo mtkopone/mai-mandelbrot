@@ -156,12 +156,12 @@
   }
   
   function shuffle(o) {
-    for(var j, x, i = o.length; i; j = parseInt(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
-    return o;
+    for(var j, x, i = o.length; i; j = parseInt(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x)
+    return o
   }
   
   function determinePixel(a, b, maxRecursions, palette) {
-    // z(n+1) = z(n)2 + (a + bi)  with  z(0) = 0
+    // z(n+1) = z(n)2 + (a + bi)  with  z(0) = a + bi
     var currA = a
     var currB = b
     for (var ii = 0; ii < maxRecursions; ii++) {
@@ -170,9 +170,7 @@
       currA = nextA
       currB = nextB
       var currR = currA*currA + currB*currB
-      if (currR > maxR) {
-        return palette[ii]
-      }
+      if (currR > maxR) return palette[ii]
     }
     return 'black'
   }
