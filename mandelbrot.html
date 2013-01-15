@@ -1,0 +1,198 @@
+<html>
+<head>
+  <title>Mai Mandelbrot</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+  <style>
+    * { margin:0; padding:0; }
+    html, body { width:100%; height:100%; font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif; }
+    #c { display:block; }
+    #title { position: absolute; top: 7px; left: 7px; color: #d6d3ce; }
+    #log { position: absolute; top: 7px; right: 7px; color: #d6d3ce; text-align: right; }
+    .detail { font-size: 80%; color: #a3a3a3; }
+    #title .detail { display: none }
+  </style>
+</head>
+<body>
+<div id="title"><div class="info">Mai Mandelbrot</div><div class="detail"><p>Left-click to Zoom In</p><p>Right-click to Zoom Out</p><p>R to Reset</p></div></div>
+<div id="log"><div class="info"></div><div class="detail"></div></div>
+<canvas id="c"></canvas>
+<script>
+  var defaultOpts = { center: [-0.7, 0], aRadius: 2.5 }
+  var canvas = document.getElementById('c')
+  var maxR = 10
+  var w = canvas.width
+  var h = canvas.height
+
+  var draw = canvas.getContext('2d')
+  var opts = loadHash()
+
+  var current;
+
+  $(window).resize(resize)
+
+  resize()
+
+  function resize() {
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+    w = canvas.width
+    h = canvas.height
+    go(opts)
+  }
+  
+  $('#title').hover(
+    function() { $('#title .detail').fadeIn() }, 
+    function() { $('#title .detail').fadeOut() }
+  )
+
+  $('#c').click(function(e) {
+    go({ center: clickCoordinates(e), aRadius: opts.aRadius / 2 })
+  })
+  $('#c').on('contextmenu', function(e) {
+    go({ center: clickCoordinates(e), aRadius: opts.aRadius * 2 })
+    return false
+  })
+  $(document).keyup(function(e) {
+    if (e.which != 82) return
+    go(defaultOpts)
+  })
+  
+  function go(newOpts) {
+    if (current) current.stop()
+    opts = newOpts
+    current = renderer(opts)
+  }
+  
+  function clickCoordinates(e) {
+    var bRadius = h * opts.aRadius / w
+    return [
+      e.offsetX * (opts.aRadius * 2) / w + opts.center[0] - opts.aRadius,
+      e.offsetY * (bRadius * 2) / h + opts.center[1] - bRadius
+    ]    
+  }
+  
+  function log(txt, obj) { $('#log .info').text(txt+ ' ' + (obj ? JSON.stringify(obj) : '')); $('#log .detail').empty() }
+  function logDetail(txt) { $('#log .detail').text(txt) }
+  
+  function renderer(opts) {
+    setHash(opts)
+    log('Rendering ', { a:opts.center[0], b:opts.center[1], r:opts.aRadius })
+    var rects = [0, 1, 2, 3, 5, 7, 9, 13, 20]
+    var stop = false
+    var bRadius = h * opts.aRadius / w
+    var as = [opts.center[0] - opts.aRadius, opts.center[0] + opts.aRadius]
+    var bs = [opts.center[1] - bRadius, opts.center[1] + bRadius]    
+
+    renderLoop()
+
+    return { stop: function() { stop = true } }
+
+    function renderLoop() {
+      var accuracy = determineAccuracy(rects, opts.aRadius)
+      if (accuracy) {
+        logDetail('@ max ' + accuracy.maxRecursions + ' iterations.')
+        renderRectangles(as, bs, accuracy.rectSize, accuracy.maxRecursions, renderLoop)
+      } else {
+				logDetail('Done.')
+      }
+    }
+
+    function determineAccuracy(rects, radius) {
+      if (!rects.length) return
+      var rectSize = rects.pop()
+      var recursions = (6 - rects.length) * 100
+      if (recursions <= 0) recursions = 50
+      recursions = recursions * Math.pow(2, Math.round(-log10(radius / 5)))
+      return { rectSize: rectSize || 1, maxRecursions: recursions } || undefined
+    }
+
+    function renderRectangles(as, bs, side, maxRecursions, done) {
+      var aNum = (w / side)
+      var aSide = (as[1] - as[0]) / aNum
+      var aOffset = as[0] + (aSide / 2)
+
+      var bNum = (h / side)
+      var bSide = (bs[1] - bs[0]) / bNum
+      var bOffset = bs[0] + (bSide / 2)
+
+      var points = []
+      for (var aa = 0; aa < aNum; aa++) {
+        for (var bb = 0; bb < bNum; bb++) {
+          points.push([aa,bb])
+        }
+      }
+      var palette = createPalette(maxRecursions)
+      var takeN = points.length / 20
+      var arr = shuffle(points)
+
+      setTimeout(renderSome, 0)
+
+      function renderSome() {
+				if (stop) return
+        var ps = arr.splice(0, takeN)
+        if (ps.length === 0) return done()
+
+        ps.forEach(function(p) {
+          var a = aOffset + p[0] * aSide
+          var b = bOffset + p[1] * bSide
+          draw.fillStyle = determinePixel(a, b, maxRecursions, palette)
+          var x = p[0] * side
+          var y = p[1] * side
+          draw.fillRect(x, y, side, side)
+        })
+        setTimeout(renderSome, 0)
+      }
+    }
+  }
+
+  function createPalette(numColors) {
+    var p = []
+		// lame: var red = ii < 15 ? ii * 5 : (75 + 180 / maxRecursions * (ii - 15)).toFixed();
+    for (var cc = 0; cc < numColors; cc++) {
+      var red = (75 + 180 * Math.pow(cc / numColors, 0.30)).toFixed()
+      p.push('rgb('+red+',0,0)')
+    }
+    return p
+  }
+  
+  function shuffle(o) {
+    for(var j, x, i = o.length; i; j = parseInt(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
+    return o;
+  }
+  
+  function determinePixel(a, b, maxRecursions, palette) {
+    // z(n+1) = z(n)2 + (a + bi)  with  z(0) = 0
+    var currA = a
+    var currB = b
+    for (var ii = 0; ii < maxRecursions; ii++) {
+      var nextA = currA*currA - currB*currB + a
+      var nextB = 2 * currA * currB + b
+      currA = nextA
+      currB = nextB
+      var currR = currA*currA + currB*currB
+      if (currR > maxR) {
+        return palette[ii]
+      }
+    }
+    return 'black'
+  }
+
+  function log10(x) {
+    return Math.log(x) / Math.LN10
+  }  
+  function setHash(opts) {
+    window.location.hash = 'a='+opts.center[0]+';b='+opts.center[1]+';r='+opts.aRadius
+  }
+  function loadHash() {
+    var re = /^#a=(-?\d+\.?\d*)\;b=(-?\d+\.?\d*)\;r=(\d+\.?\d*)$/
+    var match = window.location.hash.match(re)
+    try {
+      return { center: [parseFloat(match[1]), parseFloat(match[2])], aRadius: parseFloat(match[3]) }
+    } catch (e) {
+      return defaultOpts
+    }    
+  }
+          
+</script>
+</body>
+</html>
